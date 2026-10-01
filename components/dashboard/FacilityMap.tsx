@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import type { Map as LeafletMap } from "leaflet";
 import type { Facility, MatchRequest } from "@/types";
 
 interface FacilityMapProps {
@@ -19,15 +20,16 @@ export function FacilityMap({
   activeMatches,
 }: FacilityMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<unknown>(null);
 
   useEffect(() => {
-    if (!mapRef.current || mapInstanceRef.current) return;
+    if (!mapRef.current) return;
 
-    let cleanup: (() => void) | undefined;
+    let cancelled = false;
+    let map: LeafletMap | undefined;
 
     (async () => {
       const L = (await import("leaflet")).default;
+      if (cancelled || !mapRef.current) return;
 
       // Fix default icon paths broken by webpack
       delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
@@ -40,10 +42,7 @@ export function FacilityMap({
           "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
       });
 
-      const map = L.map(mapRef.current!).setView(
-        [facility.lat, facility.lng],
-        10
-      );
+      map = L.map(mapRef.current).setView([facility.lat, facility.lng], 10);
 
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution:
@@ -109,16 +108,12 @@ export function FacilityMap({
           }
         ).addTo(map);
       }
-
-      mapInstanceRef.current = map;
-
-      cleanup = () => {
-        map.remove();
-        mapInstanceRef.current = null;
-      };
     })();
 
-    return () => cleanup?.();
+    return () => {
+      cancelled = true;
+      map?.remove();
+    };
   }, [facility, allFacilities, activeMatches]);
 
   return (
